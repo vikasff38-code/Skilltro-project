@@ -21,4 +21,9 @@ class SkillSuggestionRulesTest {
   @Test void doesNotSuggestFromAnEmptyDescription() {
     assertEquals(List.of(), SkillSuggestionRules.suggest(CATALOG, null, Set.of()));
   }
+
+  @Test void extractsTheSentenceAsSkillEvidence() {
+    assertEquals("I build furniture and repair pipe fittings.",
+        SkillSuggestionRules.evidenceFor("Carpentry", "I build furniture and repair pipe fittings."));
+  }
 }

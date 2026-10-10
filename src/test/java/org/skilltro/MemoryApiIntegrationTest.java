@@ -23,14 +23,14 @@ class MemoryApiIntegrationTest {
   private MockMvc mvc;
   private UserRepo users; private WorkerRepo workers; private EmployerRepo employers; private SkillRepo skills;
   private WorkerSkillRepo workerSkills; private QuestionRepo questions; private AttemptRepo attempts;
-  private JobRepo jobs; private JobSkillRepo jobSkills; private ApplicationRepo applications;
+  private JobRepo jobs; private JobSkillRepo jobSkills; private ApplicationRepo applications; private MatchResultRepo matchResults;
 
   @BeforeEach void setUp(){
     users=new MemoryUserRepo(new MemoryTable<>());workers=new MemoryWorkerRepo(new MemoryTable<>());
     employers=new MemoryEmployerRepo(new MemoryTable<>());skills=new MemorySkillRepo(new MemoryTable<>());
     workerSkills=new MemoryWorkerSkillRepo(new MemoryTable<>());questions=new MemoryQuestionRepo(new MemoryTable<>());
     attempts=new MemoryAttemptRepo(new MemoryTable<>());jobs=new MemoryJobRepo(new MemoryTable<>());
-    jobSkills=new MemoryJobSkillRepo(new MemoryTable<>());applications=new MemoryApplicationRepo(new MemoryTable<>());
+    jobSkills=new MemoryJobSkillRepo(new MemoryTable<>());applications=new MemoryApplicationRepo(new MemoryTable<>());matchResults=new MemoryMatchResultRepo(new MemoryTable<>());
     String[] names={"Carpentry","Welding","Electrical wiring","Plumbing","Masonry","Painting","Cooking","Driving","Machine operation","First aid"};
     for(String name:names){Skill sk=new Skill();sk.name=name;sk.category="Practical";skills.save(sk);}
 
@@ -49,7 +49,8 @@ class MemoryApiIntegrationTest {
     addJob(employer,"Workshop Carpenter","Pune","Build and repair furniture with a small workshop team.","Carpentry","Painting","");
     addJob(employer,"Site Electrical Helper","Pune","Assist a licensed electrician with safe wiring installation.","Electrical wiring","First aid","Licensed electrician supervision required.");
     addJob(employer,"Community Kitchen Cook","Mumbai","Prepare meals for a neighborhood kitchen.","Cooking","Driving","");
-    mvc=MockMvcBuilders.standaloneSetup(new Api(users,workers,employers,skills,workerSkills,questions,attempts,jobs,jobSkills,applications)).build();
+    SkillTroService service=new SkillTroService(users,workers,employers,skills,workerSkills,questions,attempts,jobs,jobSkills,applications,matchResults,json);
+    mvc=MockMvcBuilders.standaloneSetup(new Api(service)).build();
   }
 
   @Test void workerCanApplyAndEmployerCanUpdateStatus() throws Exception {
@@ -82,6 +83,8 @@ class MemoryApiIntegrationTest {
 
     JsonNode openJobs=json.readTree(mvc.perform(get("/api/worker/jobs").session(worker))
         .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    WorkerProfile persistedWorker=workers.findByUserId(users.findByEmailIgnoreCase("worker.demo@skilltro.local").orElseThrow().id).orElseThrow();
+    assertTrue(matchResults.findByWorkerProfileIdAndJobId(persistedWorker.id,1L).isPresent(),"worker opportunity matches should be persisted");
     long jobId=-1;
     for(JsonNode job:openJobs)if("Workshop Carpenter".equals(job.path("title").asText()))jobId=job.path("jobId").asLong();
     assertTrue(jobId>0);
@@ -157,7 +160,7 @@ class MemoryApiIntegrationTest {
         .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     JsonNode carpenterJob=null;for(JsonNode job:jobsJson)if("Workshop Carpenter".equals(job.path("title").asText()))carpenterJob=job;
     org.junit.jupiter.api.Assertions.assertNotNull(carpenterJob);
-    org.junit.jupiter.api.Assertions.assertEquals(0,carpenterJob.path("matchPercentage").asInt());
+    org.junit.jupiter.api.Assertions.assertEquals(25,carpenterJob.path("matchPercentage").asInt());
     org.junit.jupiter.api.Assertions.assertTrue(carpenterJob.path("missingSkills").toString().contains("Carpentry"));
 
     JsonNode assessment=json.readTree(mvc.perform(get("/api/worker/assessments").session(worker))

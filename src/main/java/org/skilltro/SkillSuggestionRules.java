@@ -33,4 +33,20 @@ public final class SkillSuggestionRules {
             .stream().anyMatch(text::contains))
         .toList();
   }
+
+  /** Returns the sentence containing a catalog phrase, for a worker-reviewed evidence note. */
+  public static String evidenceFor(String skillName,String description) {
+    if(description==null||description.isBlank())return "";
+    String lower=description.toLowerCase(Locale.ROOT);
+    for(String phrase:PHRASES.getOrDefault(skillName,List.of(skillName.toLowerCase(Locale.ROOT)))){
+      int index=lower.indexOf(phrase.toLowerCase(Locale.ROOT));
+      if(index<0)continue;
+      int start=Math.max(Math.max(lower.lastIndexOf('.',index),lower.lastIndexOf('!',index)),Math.max(lower.lastIndexOf('?',index),lower.lastIndexOf('\n',index)))+1;
+      int end=description.length();
+      for(char boundary:new char[]{'.','!','?','\n'}){int next=lower.indexOf(boundary,index+phrase.length());if(next>=0)end=Math.min(end,next+(boundary=='\n'?0:1));}
+      String sentence=description.substring(start,end).trim();
+      return sentence.length()>2000?sentence.substring(0,2000):sentence;
+    }
+    return "";
+  }
 }

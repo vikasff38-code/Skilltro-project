@@ -1,104 +1,106 @@
 # SkillTro
 
-SkillTro is a React + Vite application backed by Java 17, Spring Boot, Spring Data JPA/Hibernate, and PostgreSQL. It connects workers and employers using worker-confirmed skills, transparent required-skill overlap, assessment knowledge checks, and job applications.
+SkillTro is a React + Vite frontend and Java 17 / Spring Boot REST backend. Spring Data JPA stores accounts, profiles, skills and fictional work evidence, knowledge assessments, opportunities, applications, and worker-to-opportunity match snapshots in a local file-backed H2 database.
+
+The existing frontend uses the `/api` routes and cookie sessions. Vite proxies API calls to Spring Boot on port 8080 during local development.
 
 ## Requirements
 
-- Java 17+
-- Java 17+ (the Maven Wrapper downloads the project-pinned Maven 3.9.9 distribution on first use; no global Maven installation is needed)
-- Node.js 20+ and npm
-- PostgreSQL 14+
+- Java 17 or newer (the Maven Wrapper pins Maven 3.9.9)
+- Node.js 20 or newer and npm
+- No PostgreSQL server, Docker, Supabase, or database download is needed
 
-## PostgreSQL setup
-
-Create a local PostgreSQL database and role (run these statements as a PostgreSQL administrator):
-
-```sql
-CREATE USER skilltro WITH PASSWORD 'choose-a-local-password';
-CREATE DATABASE skilltro OWNER skilltro;
-```
-
-If Docker Compose is installed, the included service can start PostgreSQL instead:
+## Start the backend (PowerShell)
 
 ```powershell
-$env:DATABASE_PASSWORD = 'choose-a-local-password'
-docker compose up -d postgres
-```
-
-The application reads `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` from its environment. The safe local defaults point to `localhost:5432/skilltro`; set a password before starting the backend. Hibernate creates/updates the schema on startup (`ddl-auto: update`). For example, in PowerShell:
-
-```powershell
-$env:DATABASE_URL = 'jdbc:postgresql://localhost:5432/skilltro'
-$env:DATABASE_USERNAME = 'skilltro'
-$env:DATABASE_PASSWORD = 'choose-a-local-password'
-```
-
-Do not commit `.env` or real credentials. `.env.example` is a template; Spring does not automatically load it.
-
-## Start without PostgreSQL (development only)
-
-Select the temporary in-memory profile explicitly:
-
-```powershell
-.\mvnw.cmd "-Dspring-boot.run.profiles=dev-memory" spring-boot:run
-```
-
-This profile does not require PostgreSQL or database credentials. It keeps records only in process memory; **all user-created data is lost when the backend stops or restarts**, and demo seed data is recreated on startup. Do not use this profile for production or persistence checks. The default profile remains `postgres`.
-
-Start the frontend in a second terminal:
-
-```powershell
-npm install
-npm run dev
-```
-
-## Start with PostgreSQL
-
-After PostgreSQL is initialized and running, start the backend with its credentials in the environment:
-
-Backend:
-
-```powershell
-$env:DATABASE_URL = 'jdbc:postgresql://localhost:5432/skilltro'
-$env:DATABASE_USERNAME = 'skilltro'
-$env:DATABASE_PASSWORD = 'choose-a-local-password'
+Set-Location C:\Users\chviv\skilltro
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-26.0.1'
+$env:SPRING_PROFILES_ACTIVE = 'local'
 .\mvnw.cmd spring-boot:run
 ```
 
-Frontend (second terminal):
+Change `JAVA_HOME` if your JDK is installed elsewhere. The first run downloads Maven dependencies, applies `src/main/resources/db/migration/V1__initial_schema.sql` through Flyway, creates `data\skilltro.mv.db`, and adds the synthetic demo records. The H2 database is file-based and survives backend restarts. Flyway owns schema creation; Hibernate validates the schema at startup.
+
+The H2 console is disabled by default. Enable it only for local development by activating the `local` profile. The console is then at [http://localhost:8080/h2-console](http://localhost:8080/h2-console). Use JDBC URL `jdbc:h2:file:./data/skilltro;DB_CLOSE_ON_EXIT=FALSE`, username `sa`, and the empty password unless you set `H2_DATABASE_PASSWORD`.
+
+To run without the H2 console, omit the `local` profile or set a non-local active profile before starting:
 
 ```powershell
-npm install
+$env:SPRING_PROFILES_ACTIVE = 'production'
+.\mvnw.cmd spring-boot:run
+```
+
+Unset it after use with `Remove-Item Env:SPRING_PROFILES_ACTIVE -ErrorAction SilentlyContinue`.
+
+## Database configuration
+
+The default connection and credentials are in `src/main/resources/application.properties`. Override them in PowerShell when needed:
+
+```powershell
+$env:H2_DATABASE_URL = 'jdbc:h2:file:./data/skilltro;DB_CLOSE_ON_EXIT=FALSE'
+$env:H2_DATABASE_USERNAME = 'sa'
+$env:H2_DATABASE_PASSWORD = ''
+```
+
+`.env.example` is a reference only; Spring Boot does not load `.env` automatically. Do not commit database passwords. The local H2 default uses an empty password and is intended for a local development database. The H2 console is restricted to loopback access and disabled unless the `local` profile is active.
+
+## Start the frontend (second PowerShell window)
+
+```powershell
+Set-Location C:\Users\chviv\skilltro
+npm ci
 npm run dev
 ```
 
-Open the Vite URL printed in the terminal. Vite proxies `/api` requests to `http://localhost:8080`.
+Open [http://localhost:5173](http://localhost:5173). Vite forwards `/api` requests to `http://localhost:8080`. The backend allows the local Vite origins listed by `SKILLTRO_CORS_ALLOWED_ORIGINS`.
 
-## Tests
+## Demo data
 
-Run the backend suite with `.\mvnw.cmd test`. The in-memory API tests exercise registration validation, authentication and role failures, profile updates, skill suggestions and confirmation, assessment submission, job matching and application submission, employer status updates, and worker status retrieval. Repository tests cover IDs, timestamps, lookup, uniqueness, relations, and deletion. These tests do not verify PostgreSQL persistence; that requires a running PostgreSQL server. The wrapper downloads Maven 3.9.9 from Maven Central on first use and does not require a global Maven installation.
+On startup, the idempotent seeder adds **20 fictional workers, 10 fictional employer profiles, 30 fictional opportunities, 40 fictional skill-evidence entries, 30 assessment questions, 10 synthetic knowledge-check results, and up to 600 worker/opportunity match snapshots**. It checks stable demo account emails and record relationships so restarts do not duplicate seeded records. It does not overwrite existing profile data, and it never creates applications or hiring outcomes.
 
-## Demo accounts
+Demo worker and opportunity cards carry a “Demo data” label. Evidence and seeded assessment results are explicitly identified as fictional; they are not endorsements, real assessments, or verified credentials. A match score is an explainable profile fit indicator, not a hiring probability or hiring outcome.
 
-The backend seeds these accounts and three clearly labeled demo opportunities on an empty database:
+Demo sign-ins:
 
-- Worker: `worker.demo@skilltro.local` / `worker-demo-123`
+- Worker: `worker.demo@skilltro.local` / `worker-demo-123` (Ravi Kumar)
 - Employer: `employer.demo@skilltro.local` / `employer-demo-123`
 
-The seed data includes skill records and assessment questions. Create another account through the UI to exercise registration and profile setup.
+The passwords exist only for local presentation data. Seeded applications are intentionally empty.
 
-## Product behavior
+## Matching behavior
 
-- Passwords are hashed with BCrypt. Authentication uses an HTTP session cookie, and worker/employer endpoints enforce role and job ownership.
-- Worker skill suggestions use simple phrase matching against occupation and work description. A worker must confirm a skill before it contributes to matching; rejected suggestions are stored and excluded.
-- Match percentage is `matched required skills / total required skills × 100`. Preferred skills are displayed separately. Missing required skills are called out explicitly; match percentage is not a hiring probability and cannot supersede safety, legal, or licensing requirements.
-- Multiple-choice assessment attempts measure quiz answers only. They are not proof of practical competence.
-- All created job listings are marked as demo opportunities. Demo data is only seeded for a fresh database.
+The backend uses one matching calculation for live API responses and persisted snapshots. The score weights required-skill overlap (60%), experience fit (15%), evidence coverage among matched required skills (15%), and location fit (10%). Remote opportunities match workers in any location. Each response includes the match percentage, matched and missing required skills, relevant fictional or user-supplied evidence, experience/location checks, and a plain-language explanation. Preferred skills are shown separately and do not replace missing requirements.
 
-## API overview
+## Run checks
 
-REST JSON routes live under `/api`: `/auth/*`, `/worker/*`, `/employer/*`, and `/skills`. The schema is managed by JPA entities in `src/main/java/org/skilltro/Domain.java` and initialized with demo data in `Api.java`.
+From the repository root in PowerShell:
 
-## Verification status
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-26.0.1'
+.\mvnw.cmd clean test
+npm run build
+```
 
-Build and PostgreSQL persistence must be verified in an environment with Java 17 and a reachable PostgreSQL service. The checked-in Maven Wrapper supplies Maven 3.9.9. Do not treat the presence of source files or the included seed data as evidence that PostgreSQL is running.
+The backend tests use isolated in-memory H2 databases, so they do not modify the local presentation database. To smoke-test the running application, log in and retrieve database-backed matches:
+
+```powershell
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$loginBody = @{ email = 'worker.demo@skilltro.local'; password = 'worker-demo-123' } | ConvertTo-Json
+Invoke-RestMethod -Uri 'http://localhost:8080/api/auth/login' -Method Post -WebSession $session -ContentType 'application/json' -Body $loginBody
+Invoke-RestMethod -Uri 'http://localhost:8080/api/worker/jobs' -Method Get -WebSession $session
+```
+
+Employer worker discovery is available at `/api/employer/workers?skill=Electrical%20wiring&location=Hyderabad`. Worker opportunities accept optional `search` and `location` query parameters. The API requires a session login for those routes.
+
+## Key files
+
+- `src/main/resources/application.properties`: H2 connection, Flyway, Hibernate validation, CORS.
+- `src/main/resources/application-local.properties`: local-only H2 console.
+- `src/main/resources/db/migration/V1__initial_schema.sql`: H2 schema creation script.
+- `src/main/java/org/skilltro/Domain.java`: persisted entities and relationships.
+- `src/main/java/org/skilltro/Repositories.java`: Spring Data repositories.
+- `src/main/java/org/skilltro/SkillTroService.java`: API use cases, persistence, and match snapshots.
+- `src/main/java/org/skilltro/MatchingRules.java`: shared explainable matching calculation.
+- `src/main/java/org/skilltro/SeedData.java`: idempotent fictional presentation data.
+- `src/main/java/org/skilltro/Api.java`: REST routes and session handling.
+- `src/App.jsx`: existing React interface and API client.

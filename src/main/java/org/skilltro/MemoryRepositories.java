@@ -4,6 +4,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.BiPredicate;
@@ -15,6 +19,12 @@ import static org.skilltro.Domain.*;
 @Configuration
 @Profile("dev-memory")
 class MemoryRepositoriesConfiguration {
+  @Bean PlatformTransactionManager memoryTransactionManager(){return new AbstractPlatformTransactionManager(){
+    @Override protected Object doGetTransaction(){return new Object();}
+    @Override protected void doBegin(Object transaction,TransactionDefinition definition){}
+    @Override protected void doCommit(DefaultTransactionStatus status){}
+    @Override protected void doRollback(DefaultTransactionStatus status){}
+  };}
   @Bean MemoryTable<User> userTable(){return new MemoryTable<>();}
   @Bean MemoryTable<WorkerProfile> workerTable(){return new MemoryTable<>();}
   @Bean MemoryTable<EmployerProfile> employerTable(){return new MemoryTable<>();}
@@ -25,6 +35,7 @@ class MemoryRepositoriesConfiguration {
   @Bean MemoryTable<Job> jobTable(){return new MemoryTable<>();}
   @Bean MemoryTable<JobSkill> jobSkillTable(){return new MemoryTable<>();}
   @Bean MemoryTable<Application> applicationTable(){return new MemoryTable<>();}
+  @Bean MemoryTable<MatchResult> matchResultTable(){return new MemoryTable<>();}
 
   @Bean UserRepo userRepo(MemoryTable<User> t){return new MemoryUserRepo(t);}
   @Bean WorkerRepo workerRepo(MemoryTable<WorkerProfile> t){return new MemoryWorkerRepo(t);}
@@ -36,6 +47,7 @@ class MemoryRepositoriesConfiguration {
   @Bean JobRepo jobRepo(MemoryTable<Job> t){return new MemoryJobRepo(t);}
   @Bean JobSkillRepo jobSkillRepo(MemoryTable<JobSkill> t){return new MemoryJobSkillRepo(t);}
   @Bean ApplicationRepo applicationRepo(MemoryTable<Application> t){return new MemoryApplicationRepo(t);}
+  @Bean MatchResultRepo matchResultRepo(MemoryTable<MatchResult> t){return new MemoryMatchResultRepo(t);}
 }
 
 /** Small synchronized table with generated IDs, timestamps, updates, deletion, and unique checks. */
@@ -117,6 +129,7 @@ final class MemoryJobSkillRepo implements JobSkillRepo {
   public <S extends JobSkill>S save(S e){required(e.job!=null&&e.job.id!=null&&e.skill!=null&&e.skill.id!=null&&e.requirementType!=null,"job skill relations");return t.save(e,(a,b)->Objects.equals(a.job.id,b.job.id)&&Objects.equals(a.skill.id,b.skill.id)&&Objects.equals(a.requirementType,b.requirementType));}
   public List<JobSkill> findByJobId(Long id){return t.find(x->Objects.equals(x.job.id,id));}
   public void deleteAll(Iterable<? extends JobSkill> entities){t.deleteAll(entities);}
+  public void flush(){}
 }
 final class MemoryApplicationRepo implements ApplicationRepo {
   private final MemoryTable<Application> t; MemoryApplicationRepo(MemoryTable<Application> t){this.t=t;}
@@ -125,6 +138,11 @@ final class MemoryApplicationRepo implements ApplicationRepo {
   public List<Application> findByWorkerProfileId(Long id){return t.find(x->Objects.equals(x.workerProfile.id,id));}
   public List<Application> findByJobEmployerId(Long id){return t.find(x->Objects.equals(x.job.employer.id,id));}
   public boolean existsByJobIdAndWorkerProfileId(Long jobId,Long workerId){return t.exists(x->Objects.equals(x.job.id,jobId)&&Objects.equals(x.workerProfile.id,workerId));}
+}
+final class MemoryMatchResultRepo implements MatchResultRepo {
+  private final MemoryTable<MatchResult> t; MemoryMatchResultRepo(MemoryTable<MatchResult> t){this.t=t;}
+  public <S extends MatchResult>S save(S e){required(e.workerProfile!=null&&e.workerProfile.id!=null&&e.job!=null&&e.job.id!=null,"match result relations");return t.save(e,(a,b)->Objects.equals(a.workerProfile.id,b.workerProfile.id)&&Objects.equals(a.job.id,b.job.id));}
+  public Optional<MatchResult> findByWorkerProfileIdAndJobId(Long workerId,Long jobId){return t.findAll().stream().filter(x->Objects.equals(x.workerProfile.id,workerId)&&Objects.equals(x.job.id,jobId)).findFirst();}
 }
 
 final class MemoryValidation {
